@@ -458,17 +458,9 @@ def speak_local(text, voice, speed):
         else:
             voice_model = PiperVoice.load(str(model_path))
 
-        # Adjust length scale for speed (< 1 is faster)
-        if speed != 1.0:
-            voice_model.config.length_scale = 1.0 / speed
-
-        # Synthesize speech using streaming API
+        # Synthesize speech (speed control requires piper-tts >= 1.2.0)
         with wave.open(tmp_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)
-            wav_file.setsampwidth(2)
-            wav_file.setframerate(voice_model.config.sample_rate)
-            for audio_bytes in voice_model.synthesize_stream_raw(text):
-                wav_file.writeframes(audio_bytes)
+            voice_model.synthesize(text, wav_file)
 
         # Read and return the audio file
         with open(tmp_path, 'rb') as f:
