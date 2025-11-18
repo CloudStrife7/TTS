@@ -467,8 +467,8 @@ def speak_local(text, voice, speed):
             wav_file.setnchannels(1)  # Mono
             wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(voice_model.config.sample_rate)
-            for audio_bytes in voice_model.synthesize(text):
-                wav_file.writeframes(audio_bytes)
+            for audio_chunk in voice_model.synthesize(text):
+                wav_file.writeframes(audio_chunk.audio)
 
         # Read and return the audio file
         with open(tmp_path, 'rb') as f:
