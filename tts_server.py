@@ -300,6 +300,24 @@ HTML_TEMPLATE = '''
                         <span>2.0x</span>
                     </div>
                 </div>
+
+                <div class="speed-control">
+                    <label for="expressiveness">Expressiveness: <span id="expressivenessValue">0.67</span></label>
+                    <input type="range" id="expressiveness" name="expressiveness" min="0.0" max="1.0" step="0.05" value="0.67">
+                    <div class="speed-label">
+                        <span>Flat</span>
+                        <span>Dramatic</span>
+                    </div>
+                </div>
+
+                <div class="speed-control">
+                    <label for="sentence_pause">Sentence Pause: <span id="sentencePauseValue">0.2s</span></label>
+                    <input type="range" id="sentence_pause" name="sentence_pause" min="0.0" max="2.0" step="0.1" value="0.2">
+                    <div class="speed-label">
+                        <span>None</span>
+                        <span>2s</span>
+                    </div>
+                </div>
             </div>
 
             <button type="submit" id="speakBtn">Speak</button>
@@ -323,9 +341,21 @@ HTML_TEMPLATE = '''
         const speakBtn = document.getElementById('speakBtn');
         const speedSlider = document.getElementById('speed');
         const speedValue = document.getElementById('speedValue');
+        const expressivenessSlider = document.getElementById('expressiveness');
+        const expressivenessValue = document.getElementById('expressivenessValue');
+        const sentencePauseSlider = document.getElementById('sentence_pause');
+        const sentencePauseValue = document.getElementById('sentencePauseValue');
 
         speedSlider.addEventListener('input', () => {
             speedValue.textContent = speedSlider.value + 'x';
+        });
+
+        expressivenessSlider.addEventListener('input', () => {
+            expressivenessValue.textContent = expressivenessSlider.value;
+        });
+
+        sentencePauseSlider.addEventListener('input', () => {
+            sentencePauseValue.textContent = sentencePauseSlider.value + 's';
         });
 
         form.addEventListener('submit', async (e) => {
@@ -334,6 +364,8 @@ HTML_TEMPLATE = '''
             const text = document.getElementById('text').value.trim();
             const voice = document.getElementById('voice').value;
             const speed = parseFloat(document.getElementById('speed').value);
+            const expressiveness = parseFloat(document.getElementById('expressiveness').value);
+            const sentence_pause = parseFloat(document.getElementById('sentence_pause').value);
 
             if (!text) {
                 showStatus('Please enter some text', 'error');
@@ -351,7 +383,7 @@ HTML_TEMPLATE = '''
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ text, voice, speed })
+                    body: JSON.stringify({ text, voice, speed, expressiveness, sentence_pause })
                 });
 
                 if (!response.ok) {
@@ -412,13 +444,15 @@ def speak():
         text = data.get('text', '').strip()
         voice = data.get('voice', '')
         speed = data.get('speed', 1.0)
+        expressiveness = data.get('expressiveness', 0.667)
+        sentence_pause = data.get('sentence_pause', 0.2)
 
         if not text:
             return jsonify({'error': 'No text provided'}), 400
 
         # Handle local Piper voices
         if voice.startswith('local:'):
-            return speak_local(text, voice, speed)
+            return speak_local(text, voice, speed, expressiveness, sentence_pause)
 
         # Handle OpenAI voices
         elif voice.startswith('openai:'):
@@ -430,7 +464,7 @@ def speak():
     except Exception as e:
         return jsonify({'error': f'TTS generation failed: {str(e)}'}), 500
 
-def speak_local(text, voice, speed):
+def speak_local(text, voice, speed, expressiveness=0.667, sentence_pause=0.2):
     """Generate speech using local Piper TTS."""
     voice_name = voice.split(':')[1]
     model_path = VOICES_DIR / f"{voice_name}.onnx"
@@ -440,7 +474,7 @@ def speak_local(text, voice, speed):
         return jsonify({'error': f'Voice model not found: {voice_name}'}), 404
 
     try:
-        from piper import PiperVoice
+        from piper import PiperVoice, SynthesisConfig
         import wave
     except ImportError:
         return jsonify({
@@ -458,10 +492,17 @@ def speak_local(text, voice, speed):
         else:
             voice_model = PiperVoice.load(str(model_path))
 
+        # Create synthesis config with parameters
+        syn_config = SynthesisConfig(
+            noise_scale=expressiveness,
+            length_scale=1.0 / speed if speed != 1.0 else 1.0,
+            sentence_silence=sentence_pause
+        )
+
         # Synthesize speech - piper-tts 1.3.0 API
         with wave.open(tmp_path, 'wb') as wav_file:
             first_chunk = True
-            for chunk in voice_model.synthesize(text):
+            for chunk in voice_model.synthesize(text, syn_config):
                 if first_chunk:
                     wav_file.setnchannels(chunk.sample_channels)
                     wav_file.setsampwidth(chunk.sample_width)
