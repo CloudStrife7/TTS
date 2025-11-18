@@ -462,13 +462,9 @@ def speak_local(text, voice, speed):
         if speed != 1.0:
             voice_model.config.length_scale = 1.0 / speed
 
-        # Synthesize speech
-        with wave.open(tmp_path, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(voice_model.config.sample_rate)
-            for audio_chunk in voice_model.synthesize(text):
-                wav_file.writeframes(audio_chunk.audio)
+        # Synthesize speech - Piper handles wav file setup internally
+        with wave.open(tmp_path, 'w') as wav_file:
+            voice_model.synthesize(text, wav_file)
 
         # Read and return the audio file
         with open(tmp_path, 'rb') as f:
