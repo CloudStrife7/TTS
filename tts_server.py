@@ -467,7 +467,8 @@ def speak_local(text, voice, speed):
             wav_file.setnchannels(1)  # Mono
             wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(voice_model.config.sample_rate)
-            voice_model.synthesize(text, wav_file)
+            for audio_bytes in voice_model.synthesize(text):
+                wav_file.writeframes(audio_bytes)
 
         # Read and return the audio file
         with open(tmp_path, 'rb') as f:
@@ -570,4 +571,4 @@ if __name__ == '__main__':
     print("\n" + "="*50 + "\n")
 
     # Run with host='0.0.0.0' to allow network access
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=True)
