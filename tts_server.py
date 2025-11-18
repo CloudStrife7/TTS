@@ -458,9 +458,16 @@ def speak_local(text, voice, speed):
         else:
             voice_model = PiperVoice.load(str(model_path))
 
-        # Synthesize speech (speed control requires piper-tts >= 1.2.0)
+        # Synthesize speech - piper-tts 1.3.0 API
         with wave.open(tmp_path, 'wb') as wav_file:
-            voice_model.synthesize(text, wav_file)
+            first_chunk = True
+            for chunk in voice_model.synthesize(text):
+                if first_chunk:
+                    wav_file.setnchannels(chunk.sample_channels)
+                    wav_file.setsampwidth(chunk.sample_width)
+                    wav_file.setframerate(chunk.sample_rate)
+                    first_chunk = False
+                wav_file.writeframes(chunk.audio_int16_bytes)
 
         # Read and return the audio file
         with open(tmp_path, 'rb') as f:
