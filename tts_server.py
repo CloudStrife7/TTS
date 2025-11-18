@@ -8,6 +8,7 @@ Run on your computer and access from any device on your network.
 
 import os
 import io
+import re
 import socket
 import subprocess
 import tempfile
@@ -274,6 +275,41 @@ HTML_TEMPLATE = '''
         .advanced-settings.show {
             display: block;
         }
+        .story-mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #0f3460;
+            border-radius: 8px;
+        }
+        .story-mode-toggle input {
+            width: 18px;
+            height: 18px;
+        }
+        .story-mode-toggle label {
+            margin: 0;
+            cursor: pointer;
+        }
+        .story-format-hint {
+            display: none;
+            background: #1a4a7a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .story-format-hint.show {
+            display: block;
+        }
+        .story-format-hint code {
+            background: #0f3460;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -288,6 +324,21 @@ HTML_TEMPLATE = '''
         </div>
 
         <form id="ttsForm">
+            <div class="story-mode-toggle">
+                <input type="checkbox" id="storyMode" name="storyMode">
+                <label for="storyMode">Story Mode (multiple characters)</label>
+            </div>
+
+            <div class="story-format-hint" id="storyFormatHint">
+                <strong>Story Format:</strong><br>
+                Use <code>[CHARACTER:ID]</code> tags before each speaker's text.<br><br>
+                <strong>Example:</strong><br>
+                <code>[NARRATOR:21]</code> The detective stepped into the bar.<br>
+                <code>[JAKE:45]</code> "I've been expecting you."<br>
+                <code>[NARRATOR:21]</code> His voice was like gravel.<br>
+                <code>[DETECTIVE:67]</code> "Where's the girl?"
+            </div>
+
             <label for="text">Text to speak:</label>
             <textarea id="text" name="text" placeholder="Paste or type your text here..." required></textarea>
 
@@ -416,6 +467,13 @@ HTML_TEMPLATE = '''
                 : 'Advanced Settings +';
         });
 
+        // Toggle story mode hint
+        const storyModeCheckbox = document.getElementById('storyMode');
+        const storyFormatHint = document.getElementById('storyFormatHint');
+        storyModeCheckbox.addEventListener('change', () => {
+            storyFormatHint.classList.toggle('show', storyModeCheckbox.checked);
+        });
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -425,6 +483,7 @@ HTML_TEMPLATE = '''
             const expressiveness = parseFloat(document.getElementById('expressiveness').value);
             const sentence_pause = parseFloat(document.getElementById('sentence_pause').value);
             const speaker_id = parseInt(document.getElementById('speaker_id').value);
+            const storyMode = document.getElementById('storyMode').checked;
 
             if (!text) {
                 showStatus('Please enter some text', 'error');
@@ -437,7 +496,8 @@ HTML_TEMPLATE = '''
             audioContainer.style.display = 'none';
 
             try {
-                const response = await fetch('/speak', {
+                const endpoint = storyMode ? '/speak_story' : '/speak';
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -523,6 +583,111 @@ def speak():
 
     except Exception as e:
         return jsonify({'error': f'TTS generation failed: {str(e)}'}), 500
+
+@app.route('/speak_story', methods=['POST'])
+def speak_story():
+    """Generate speech with multiple speakers for story narration."""
+    try:
+        data = request.get_json()
+        text = data.get('text', '').strip()
+        voice = data.get('voice', '')
+        speed = data.get('speed', 1.0)
+        expressiveness = data.get('expressiveness', 0.667)
+        sentence_pause = data.get('sentence_pause', 0.2)
+
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+
+        if not voice.startswith('local:'):
+            return jsonify({'error': 'Story mode only works with local multi-speaker voices'}), 400
+
+        # Parse text for [CHARACTER:ID] tags
+        # Pattern matches [NAME:ID] followed by text until next tag or end
+        pattern = r'\[([^:\]]+):(\d+)\]\s*([^\[]*)'
+        segments = re.findall(pattern, text)
+
+        if not segments:
+            return jsonify({
+                'error': 'No valid segments found. Use format: [CHARACTER:ID] text'
+            }), 400
+
+        voice_name = voice.split(':')[1]
+        model_path = VOICES_DIR / f"{voice_name}.onnx"
+        config_path = VOICES_DIR / f"{voice_name}.onnx.json"
+
+        if not model_path.exists():
+            return jsonify({'error': f'Voice model not found: {voice_name}'}), 404
+
+        try:
+            from piper import PiperVoice, SynthesisConfig
+            import wave
+        except ImportError:
+            return jsonify({
+                'error': 'Piper TTS not installed. Run: pip install piper-tts'
+            }), 500
+
+        # Load voice model once
+        if config_path.exists():
+            voice_model = PiperVoice.load(str(model_path), config_path=str(config_path))
+        else:
+            voice_model = PiperVoice.load(str(model_path))
+
+        # Generate audio for each segment
+        all_audio = []
+        sample_rate = None
+        sample_width = None
+        sample_channels = None
+
+        for char_name, speaker_id, segment_text in segments:
+            segment_text = segment_text.strip()
+            if not segment_text:
+                continue
+
+            syn_config = SynthesisConfig(
+                speaker_id=int(speaker_id),
+                noise_scale=expressiveness,
+                length_scale=1.0 / speed if speed != 1.0 else 1.0,
+                sentence_silence=sentence_pause
+            )
+
+            # Collect audio chunks for this segment
+            for chunk in voice_model.synthesize(segment_text, syn_config):
+                if sample_rate is None:
+                    sample_rate = chunk.sample_rate
+                    sample_width = chunk.sample_width
+                    sample_channels = chunk.sample_channels
+                all_audio.append(chunk.audio_int16_bytes)
+
+        if not all_audio:
+            return jsonify({'error': 'No audio generated'}), 500
+
+        # Write combined audio to temp file
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            with wave.open(tmp_path, 'wb') as wav_file:
+                wav_file.setnchannels(sample_channels)
+                wav_file.setsampwidth(sample_width)
+                wav_file.setframerate(sample_rate)
+                for audio_bytes in all_audio:
+                    wav_file.writeframes(audio_bytes)
+
+            with open(tmp_path, 'rb') as f:
+                audio_data = io.BytesIO(f.read())
+
+            return send_file(
+                audio_data,
+                mimetype='audio/wav',
+                as_attachment=False
+            )
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    except Exception as e:
+        return jsonify({'error': f'Story TTS failed: {str(e)}'}), 500
 
 def speak_local(text, voice, speed, expressiveness=0.667, sentence_pause=0.2, speaker_id=0):
     """Generate speech using local Piper TTS."""
