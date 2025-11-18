@@ -458,15 +458,16 @@ def speak_local(text, voice, speed):
         else:
             voice_model = PiperVoice.load(str(model_path))
 
-        # Calculate length scale (< 1 is faster)
-        length_scale = 1.0 / speed if speed != 1.0 else None
+        # Adjust length scale for speed (< 1 is faster)
+        if speed != 1.0:
+            voice_model.config.length_scale = 1.0 / speed
 
         # Synthesize speech
         with wave.open(tmp_path, 'wb') as wav_file:
             wav_file.setnchannels(1)  # Mono
             wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(voice_model.config.sample_rate)
-            voice_model.synthesize(text, wav_file, length_scale=length_scale)
+            voice_model.synthesize(text, wav_file)
 
         # Read and return the audio file
         with open(tmp_path, 'rb') as f:
