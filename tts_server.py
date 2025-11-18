@@ -318,6 +318,18 @@ HTML_TEMPLATE = '''
                         <span>2s</span>
                     </div>
                 </div>
+
+                <div class="speed-control">
+                    <label for="speaker_id">Speaker ID: <span id="speakerIdValue">0</span></label>
+                    <input type="range" id="speaker_id" name="speaker_id" min="0" max="100" step="1" value="0">
+                    <div class="speed-label">
+                        <span>0</span>
+                        <span>100+</span>
+                    </div>
+                    <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                        For multi-speaker models (e.g., libritts_r has 904 speakers)
+                    </div>
+                </div>
             </div>
 
             <button type="submit" id="speakBtn">Speak</button>
@@ -345,6 +357,8 @@ HTML_TEMPLATE = '''
         const expressivenessValue = document.getElementById('expressivenessValue');
         const sentencePauseSlider = document.getElementById('sentence_pause');
         const sentencePauseValue = document.getElementById('sentencePauseValue');
+        const speakerIdSlider = document.getElementById('speaker_id');
+        const speakerIdValue = document.getElementById('speakerIdValue');
 
         speedSlider.addEventListener('input', () => {
             speedValue.textContent = speedSlider.value + 'x';
@@ -358,6 +372,10 @@ HTML_TEMPLATE = '''
             sentencePauseValue.textContent = sentencePauseSlider.value + 's';
         });
 
+        speakerIdSlider.addEventListener('input', () => {
+            speakerIdValue.textContent = speakerIdSlider.value;
+        });
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -366,6 +384,7 @@ HTML_TEMPLATE = '''
             const speed = parseFloat(document.getElementById('speed').value);
             const expressiveness = parseFloat(document.getElementById('expressiveness').value);
             const sentence_pause = parseFloat(document.getElementById('sentence_pause').value);
+            const speaker_id = parseInt(document.getElementById('speaker_id').value);
 
             if (!text) {
                 showStatus('Please enter some text', 'error');
@@ -383,7 +402,7 @@ HTML_TEMPLATE = '''
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ text, voice, speed, expressiveness, sentence_pause })
+                    body: JSON.stringify({ text, voice, speed, expressiveness, sentence_pause, speaker_id })
                 });
 
                 if (!response.ok) {
@@ -446,13 +465,14 @@ def speak():
         speed = data.get('speed', 1.0)
         expressiveness = data.get('expressiveness', 0.667)
         sentence_pause = data.get('sentence_pause', 0.2)
+        speaker_id = data.get('speaker_id', 0)
 
         if not text:
             return jsonify({'error': 'No text provided'}), 400
 
         # Handle local Piper voices
         if voice.startswith('local:'):
-            return speak_local(text, voice, speed, expressiveness, sentence_pause)
+            return speak_local(text, voice, speed, expressiveness, sentence_pause, speaker_id)
 
         # Handle OpenAI voices
         elif voice.startswith('openai:'):
@@ -464,7 +484,7 @@ def speak():
     except Exception as e:
         return jsonify({'error': f'TTS generation failed: {str(e)}'}), 500
 
-def speak_local(text, voice, speed, expressiveness=0.667, sentence_pause=0.2):
+def speak_local(text, voice, speed, expressiveness=0.667, sentence_pause=0.2, speaker_id=0):
     """Generate speech using local Piper TTS."""
     voice_name = voice.split(':')[1]
     model_path = VOICES_DIR / f"{voice_name}.onnx"
@@ -494,6 +514,7 @@ def speak_local(text, voice, speed, expressiveness=0.667, sentence_pause=0.2):
 
         # Create synthesis config with parameters
         syn_config = SynthesisConfig(
+            speaker_id=speaker_id if speaker_id > 0 else None,
             noise_scale=expressiveness,
             length_scale=1.0 / speed if speed != 1.0 else 1.0,
             sentence_silence=sentence_pause
