@@ -250,6 +250,30 @@ HTML_TEMPLATE = '''
             font-size: 12px;
             color: #888;
         }
+        .advanced-toggle {
+            background: #0f3460;
+            border: none;
+            color: #00d4ff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            text-align: left;
+            margin-top: 10px;
+        }
+        .advanced-toggle:hover {
+            background: #1a4a7a;
+        }
+        .advanced-settings {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #0f3460;
+        }
+        .advanced-settings.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -300,7 +324,13 @@ HTML_TEMPLATE = '''
                         <span>2.0x</span>
                     </div>
                 </div>
+            </div>
 
+            <button type="button" class="advanced-toggle" id="advancedToggle">
+                Advanced Settings +
+            </button>
+
+            <div class="advanced-settings" id="advancedSettings">
                 <div class="speed-control">
                     <label for="expressiveness">Expressiveness: <span id="expressivenessValue">0.67</span></label>
                     <input type="range" id="expressiveness" name="expressiveness" min="0.0" max="1.0" step="0.05" value="0.67">
@@ -374,6 +404,16 @@ HTML_TEMPLATE = '''
 
         speakerIdSlider.addEventListener('input', () => {
             speakerIdValue.textContent = speakerIdSlider.value;
+        });
+
+        // Toggle advanced settings
+        const advancedToggle = document.getElementById('advancedToggle');
+        const advancedSettings = document.getElementById('advancedSettings');
+        advancedToggle.addEventListener('click', () => {
+            advancedSettings.classList.toggle('show');
+            advancedToggle.textContent = advancedSettings.classList.contains('show')
+                ? 'Advanced Settings -'
+                : 'Advanced Settings +';
         });
 
         form.addEventListener('submit', async (e) => {
