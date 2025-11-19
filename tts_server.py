@@ -542,6 +542,7 @@ HTML_TEMPLATE = '''
             const sentence_pause = parseFloat(document.getElementById('sentence_pause').value);
             const speaker_id = parseInt(document.getElementById('speaker_id').value);
             const storyMode = document.getElementById('storyMode').checked;
+            const markdownMode = document.getElementById('markdownMode').checked;
 
             if (!text) {
                 showStatus('Please enter some text', 'error');
@@ -560,7 +561,7 @@ HTML_TEMPLATE = '''
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ text, voice, speed, expressiveness, sentence_pause, speaker_id })
+                    body: JSON.stringify({ text, voice, speed, expressiveness, sentence_pause, speaker_id, markdown_mode: markdownMode })
                 });
 
                 if (!response.ok) {
@@ -624,9 +625,14 @@ def speak():
         expressiveness = data.get('expressiveness', 0.667)
         sentence_pause = data.get('sentence_pause', 0.2)
         speaker_id = data.get('speaker_id', 0)
+        markdown_mode = data.get('markdown_mode', False)
 
         if not text:
             return jsonify({'error': 'No text provided'}), 400
+
+        # Convert Markdown to TTS-friendly text if enabled
+        if markdown_mode:
+            text = markdown_to_tts(text)
 
         # Handle local Piper voices
         if voice.startswith('local:'):
