@@ -382,6 +382,11 @@ HTML_TEMPLATE = '''
                 <label for="storyMode">Story Mode (multiple characters)</label>
             </div>
 
+            <div class="story-mode-toggle">
+                <input type="checkbox" id="markdownMode" name="markdownMode">
+                <label for="markdownMode">Markdown Mode (convert .md formatting)</label>
+            </div>
+
             <div class="story-format-hint" id="storyFormatHint">
                 <strong>Story Format:</strong><br>
                 Use <code>[CHARACTER:ID]</code> tags before each speaker's text.<br><br>
