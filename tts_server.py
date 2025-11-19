@@ -79,39 +79,48 @@ def get_all_voices():
     return voices
 
 def markdown_to_tts(text):
-    """Convert Markdown formatting to TTS-friendly text with appropriate pauses."""
+    """Convert Markdown formatting to TTS-friendly text with natural reading pauses."""
 
-    # Remove code blocks (``` ... ```) - read content but mark it
-    text = re.sub(r'```[\w]*\n(.*?)```', r'... Code block: \1 ... End code block. ...', text, flags=re.DOTALL)
+    # Remove code blocks - summarize instead of reading code
+    text = re.sub(r'```[\w]*\n.*?```', r'... Code example omitted. ...', text, flags=re.DOTALL)
 
-    # Convert headings to pauses with the text
-    # # Heading 1 -> ... [pause] Heading 1 [pause] ...
-    text = re.sub(r'^#{1}\s+(.+)$', r'... ... \1 ... ...', text, flags=re.MULTILINE)
-    text = re.sub(r'^#{2}\s+(.+)$', r'... \1 ...', text, flags=re.MULTILINE)
-    text = re.sub(r'^#{3,6}\s+(.+)$', r'... \1 ...', text, flags=re.MULTILINE)
+    # Convert headings to natural section breaks
+    # H1 - Major section, long pause before and after
+    text = re.sub(r'^#\s+(.+)$', r'\n\n... ... \1. ... ...\n\n', text, flags=re.MULTILINE)
+    # H2 - Subsection
+    text = re.sub(r'^##\s+(.+)$', r'\n\n... \1. ...\n\n', text, flags=re.MULTILINE)
+    # H3-H6 - Minor headings
+    text = re.sub(r'^#{3,6}\s+(.+)$', r'\n... \1. ...\n', text, flags=re.MULTILINE)
 
-    # Convert horizontal rules to long pauses
-    text = re.sub(r'^[-*_]{3,}\s*$', r'... ... ...', text, flags=re.MULTILINE)
+    # Convert horizontal rules to section breaks
+    text = re.sub(r'^[-*_]{3,}\s*$', r'\n... ... ...\n', text, flags=re.MULTILINE)
 
-    # Convert blockquotes - remove > but keep text
-    text = re.sub(r'^>\s*(.+)$', r'Quote: \1', text, flags=re.MULTILINE)
+    # Convert blockquotes - indicate it's a quote
+    text = re.sub(r'^>\s*(.+)$', r'Quote: "\1"', text, flags=re.MULTILINE)
 
-    # Convert unordered lists - add pause between items
-    text = re.sub(r'^[\*\-\+]\s+(.+)$', r'... \1', text, flags=re.MULTILINE)
+    # Convert unordered lists - natural item reading
+    def replace_unordered_list(match):
+        return f'... {match.group(1)}.'
+    text = re.sub(r'^[\*\-\+]\s+(.+)$', replace_unordered_list, text, flags=re.MULTILINE)
 
-    # Convert ordered lists - add pause between items
-    text = re.sub(r'^\d+\.\s+(.+)$', r'... \1', text, flags=re.MULTILINE)
+    # Convert ordered lists - read with ordinal feel
+    def replace_ordered_list(match):
+        return f'... {match.group(1)}.'
+    text = re.sub(r'^\d+\.\s+(.+)$', replace_ordered_list, text, flags=re.MULTILINE)
+
+    # Convert tables - skip them, too hard to read aloud
+    text = re.sub(r'^\|.*\|$', r'', text, flags=re.MULTILINE)
 
     # Convert links [text](url) -> just the text
     text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
 
-    # Convert images ![alt](url) -> "Image: alt"
-    text = re.sub(r'!\[([^\]]*)\]\([^\)]+\)', r'Image: \1', text)
+    # Convert images ![alt](url) -> describe briefly
+    text = re.sub(r'!\[([^\]]*)\]\([^\)]+\)', r'... Image: \1. ...', text)
 
     # Remove inline code backticks
     text = re.sub(r'`([^`]+)`', r'\1', text)
 
-    # Convert bold **text** or __text__ -> just text
+    # Convert bold **text** or __text__ -> just text (TTS doesn't emphasize)
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'__([^_]+)__', r'\1', text)
 
@@ -122,12 +131,15 @@ def markdown_to_tts(text):
     # Convert strikethrough ~~text~~ -> just text
     text = re.sub(r'~~([^~]+)~~', r'\1', text)
 
-    # Clean up multiple consecutive pauses
-    text = re.sub(r'(\.\.\.\s*){3,}', r'... ... ... ', text)
+    # Add pause between paragraphs (double newlines)
+    text = re.sub(r'\n\n+', r'\n... ...\n', text)
 
-    # Clean up extra whitespace
-    text = re.sub(r'\n{3,}', r'\n\n', text)
+    # Clean up excessive pauses
+    text = re.sub(r'(\.\.\.\s*){4,}', r'... ... ... ', text)
+
+    # Clean up extra whitespace but preserve intentional pauses
     text = re.sub(r' {2,}', r' ', text)
+    text = re.sub(r'\n{3,}', r'\n\n', text)
 
     return text.strip()
 
