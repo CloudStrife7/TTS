@@ -646,8 +646,7 @@ def speak_story():
             syn_config = SynthesisConfig(
                 speaker_id=int(speaker_id),
                 noise_scale=expressiveness,
-                length_scale=1.0 / speed if speed != 1.0 else 1.0,
-                sentence_silence=sentence_pause
+                length_scale=1.0 / speed if speed != 1.0 else 1.0
             )
 
             # Collect audio chunks for this segment
@@ -721,8 +720,7 @@ def speak_local(text, voice, speed, expressiveness=0.667, sentence_pause=0.2, sp
         syn_config = SynthesisConfig(
             speaker_id=speaker_id if speaker_id > 0 else None,
             noise_scale=expressiveness,
-            length_scale=1.0 / speed if speed != 1.0 else 1.0,
-            sentence_silence=sentence_pause
+            length_scale=1.0 / speed if speed != 1.0 else 1.0
         )
 
         # Synthesize speech - piper-tts 1.3.0 API
