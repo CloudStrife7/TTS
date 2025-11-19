@@ -141,6 +141,110 @@ def markdown_to_tts(text):
     text = re.sub(r' {2,}', r' ', text)
     text = re.sub(r'\n{3,}', r'\n\n', text)
 
+    # Apply natural reading for numbers, abbreviations, symbols
+    text = natural_reading(text)
+
+    return text.strip()
+
+def natural_reading(text):
+    """Convert text to more natural TTS-friendly format with number/symbol/abbreviation expansion."""
+
+    # Common abbreviations
+    abbreviations = {
+        r'\bDr\.': 'Doctor',
+        r'\bMr\.': 'Mister',
+        r'\bMrs\.': 'Missus',
+        r'\bMs\.': 'Miss',
+        r'\bProf\.': 'Professor',
+        r'\bSt\.(?=\s+[A-Z])': 'Saint',  # Saint before names
+        r'\bSt\.(?=\s+\d)': 'Street',    # Street before numbers
+        r'\bAve\.': 'Avenue',
+        r'\bBlvd\.': 'Boulevard',
+        r'\bRd\.': 'Road',
+        r'\bDept\.': 'Department',
+        r'\bCorp\.': 'Corporation',
+        r'\bInc\.': 'Incorporated',
+        r'\bLtd\.': 'Limited',
+        r'\bvs\.': 'versus',
+        r'\betc\.': 'etcetera',
+        r'\be\.g\.': 'for example',
+        r'\bi\.e\.': 'that is',
+        r'\baka\.?': 'also known as',
+        r'\bw/': 'with',
+        r'\bw/o': 'without',
+        r'\bJr\.': 'Junior',
+        r'\bSr\.': 'Senior',
+        r'\bNo\.': 'Number',
+        r'\bVol\.': 'Volume',
+        r'\bEd\.': 'Edition',
+        r'\bPg\.': 'Page',
+        r'\bpp\.': 'pages',
+        r'\bFig\.': 'Figure',
+        r'\bapprox\.': 'approximately',
+    }
+
+    for pattern, replacement in abbreviations.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    # Symbols
+    text = re.sub(r'&', ' and ', text)
+    text = re.sub(r'@', ' at ', text)
+    text = re.sub(r'\+', ' plus ', text)
+    text = re.sub(r'=', ' equals ', text)
+    text = re.sub(r'#(\d+)', r'number \1', text)  # #5 -> number 5
+    text = re.sub(r'%', ' percent', text)
+
+    # Currency
+    text = re.sub(r'\$(\d+)\.(\d{2})', r'\1 dollars and \2 cents', text)
+    text = re.sub(r'\$(\d+)', r'\1 dollars', text)
+    text = re.sub(r'€(\d+)', r'\1 euros', text)
+    text = re.sub(r'£(\d+)', r'\1 pounds', text)
+
+    # Times
+    text = re.sub(r'(\d{1,2}):(\d{2})\s*([AaPp][Mm])', r'\1 \2 \3', text)
+    text = re.sub(r'(\d{1,2}):(\d{2})', r'\1 \2', text)
+
+    # Dates (basic MM/DD/YYYY or DD/MM/YYYY)
+    months = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+              'July', 'August', 'September', 'October', 'November', 'December']
+
+    def replace_date(match):
+        m, d, y = int(match.group(1)), int(match.group(2)), match.group(3)
+        if 1 <= m <= 12:
+            return f'{months[m]} {d}, {y}'
+        return match.group(0)
+
+    text = re.sub(r'(\d{1,2})/(\d{1,2})/(\d{4})', replace_date, text)
+
+    # Ordinal numbers
+    def make_ordinal(n):
+        n = int(n)
+        if 10 <= n % 100 <= 20:
+            suffix = 'th'
+        else:
+            suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+        return f'{n}{suffix}'
+
+    # Convert written ordinals (1st, 2nd, 3rd, 4th...)
+    text = re.sub(r'\b(\d+)(?:st|nd|rd|th)\b', lambda m: make_ordinal(m.group(1)), text)
+
+    # Numbers to words for small numbers (0-20) and round numbers
+    number_words = {
+        '0': 'zero', '1': 'one', '2': 'two', '3': 'three', '4': 'four',
+        '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine',
+        '10': 'ten', '11': 'eleven', '12': 'twelve', '13': 'thirteen',
+        '14': 'fourteen', '15': 'fifteen', '16': 'sixteen', '17': 'seventeen',
+        '18': 'eighteen', '19': 'nineteen', '20': 'twenty',
+        '100': 'one hundred', '1000': 'one thousand'
+    }
+
+    # Convert standalone small numbers
+    for num, word in number_words.items():
+        text = re.sub(rf'\b{num}\b', word, text)
+
+    # Clean up extra spaces
+    text = re.sub(r' {2,}', ' ', text)
+
     return text.strip()
 
 HTML_TEMPLATE = '''
@@ -645,6 +749,9 @@ def speak():
         # Convert Markdown to TTS-friendly text if enabled
         if markdown_mode:
             text = markdown_to_tts(text)
+
+        # Always apply natural reading (numbers, abbreviations, symbols to spoken words)
+        text = natural_reading(text)
 
         # Handle local Piper voices
         if voice.startswith('local:'):
