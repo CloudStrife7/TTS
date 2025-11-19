@@ -85,12 +85,13 @@ def markdown_to_tts(text):
     text = re.sub(r'```[\w]*\n.*?```', r'... Code example omitted. ...', text, flags=re.DOTALL)
 
     # Convert headings to natural section breaks
-    # H1 - Major section, long pause before and after
-    text = re.sub(r'^#\s+(.+)$', r'\n\n... ... \1. ... ...\n\n', text, flags=re.MULTILINE)
-    # H2 - Subsection
-    text = re.sub(r'^##\s+(.+)$', r'\n\n... \1. ...\n\n', text, flags=re.MULTILINE)
+    # IMPORTANT: Process in reverse order (### before ## before #) to avoid partial matches
     # H3-H6 - Minor headings
-    text = re.sub(r'^#{3,6}\s+(.+)$', r'\n... \1. ...\n', text, flags=re.MULTILINE)
+    text = re.sub(r'^#{3,6}\s*(.+)$', r'\n... \1. ...\n', text, flags=re.MULTILINE)
+    # H2 - Subsection
+    text = re.sub(r'^##\s*(.+)$', r'\n\n... \1. ...\n\n', text, flags=re.MULTILINE)
+    # H1 - Major section, long pause before and after
+    text = re.sub(r'^#\s*(.+)$', r'\n\n... ... \1. ... ...\n\n', text, flags=re.MULTILINE)
 
     # Convert horizontal rules to section breaks
     text = re.sub(r'^[-*_]{3,}\s*$', r'\n... ... ...\n', text, flags=re.MULTILINE)
@@ -133,6 +134,12 @@ def markdown_to_tts(text):
 
     # Add pause between paragraphs (double newlines)
     text = re.sub(r'\n\n+', r'\n... ...\n', text)
+
+    # Convert single newlines to pauses (markdown often has no periods)
+    text = re.sub(r'\n', r' ... ', text)
+
+    # Clean up any remaining hash symbols that weren't caught
+    text = re.sub(r'#', '', text)
 
     # Clean up excessive pauses
     text = re.sub(r'(\.\.\.\s*){4,}', r'... ... ... ', text)
